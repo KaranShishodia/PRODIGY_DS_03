@@ -1,0 +1,127 @@
+"""Train a Decision Tree classifier on the Bank Marketing dataset.
+
+Saves evaluation plots to an output directory.
+
+Usage:
+    python src/train_decision_tree.py --data_path data/bank_marketing.csv --output_dir outputs
+"""
+
+import argparse
+import os
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import joblib
+
+sns.set(style='whitegrid')
+
+def load_data(path):
+    df = pd.read_csv(path)
+    return df
+
+def preprocess(df, target_col='y'):
+    df = df.copy()
+    if target_col not in df.columns:
+        raise ValueError(f"Target column '{target_col}' not found in dataframe")
+
+    df = df.dropna(axis=0)
+    X = df.drop(columns=[target_col])
+    y = df[target_col].copy()
+
+    if y.dtype == object:
+        y = y.str.strip().str.lower().map({'yes': 1, 'no': 0})
+
+    cat_cols = X.select_dtypes(include=['object']).columns.tolist()
+    num_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+
+    if cat_cols:
+        oe = OrdinalEncoder(dtype=int)
+        X_cat = pd.DataFrame(oe.fit_transform(X[cat_cols]), columns=cat_cols, index=X.index)
+        X = pd.concat([X[num_cols], X_cat], axis=1)
+    else:
+        X = X[num_cols]
+
+    return X, y, cat_cols
+
+def plot_and_save_confusion(y_true, y_pred, out_path):
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(6,5))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+def plot_and_save_tree(clf, feature_names, class_names, out_path, figsize=(20,10), max_depth=3):
+    plt.figure(figsize=figsize)
+    plot_tree(clf, feature_names=feature_names, class_names=class_names, filled=True, max_depth=max_depth)
+    plt.title('Decision Tree (visualization)')
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+def plot_feature_importance(clf, feature_names, out_path):
+    fi = pd.Series(clf.feature_importances_, index=feature_names).sort_values(ascending=False)
+    plt.figure(figsize=(10,6))
+    sns.barplot(x=fi.values, y=fi.index)
+    plt.title('Feature Importance')
+    plt.xlabel('Importance')
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+def main(args):
+    df = load_data(args.data_path)
+    print('Loaded data shape:', df.shape)
+
+    X, y, cat_cols = preprocess(df, target_col=args.target)
+    print('Features shape:', X.shape)
+    print('Categorical columns encoded:', cat_cols)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=args.test_size, random_state=args.seed, stratify=y if args.stratify else None
+    )
+
+    clf = DecisionTreeClassifier(criterion=args.criterion, max_depth=args.max_depth, random_state=args.seed)
+    clf.fit(X_train, y_train)
+
+    y_pred = clf.predict(X_test)
+    print('\nAccuracy:', accuracy_score(y_test, y_pred))
+    print('\nClassification Report:\n', classification_report(y_test, y_pred))
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    cm_path = Path(args.output_dir) / 'confusion_matrix.png'
+    plot_and_save_confusion(y_test, y_pred, cm_path)
+
+    tree_path = Path(args.output_dir) / 'decision_tree.png'
+    plot_and_save_tree(clf, feature_names=X.columns.tolist(), class_names=['no','yes'], out_path=tree_path, max_depth=args.plot_tree_depth)
+
+    fi_path = Path(args.output_dir) / 'feature_importance.png'
+    plot_feature_importance(clf, feature_names=X.columns.tolist(), out_path=fi_path)
+
+    model_path = Path(args.output_dir) / 'decision_tree_model.joblib'
+    joblib.dump(clf, model_path)
+    print('\nSaved model to', model_path)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train Decision Tree on Bank Marketing data')
+    parser.add_argument('--data_path', type=str, required=True, help='Path to CSV file')
+    parser.add_argument('--output_dir', type=str, default='outputs', help='Directory to save outputs')
+    parser.add_argument('--target', type=str, default='y', help='Target column name')
+    parser.add_argument('--test_size', type=float, default=0.2, help='Test set fraction')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--max_depth', type=int, default=5, help='Max depth for Decision Tree')
+    parser.add_argument('--criterion', type=str, default='entropy', choices=['gini','entropy'])
+    parser.add_argument('--stratify', type=lambda x: (str(x).lower() == 'true'), default=True, help='Stratify train/test split (True/False)')
+    parser.add_argument('--plot_tree_depth', type=int, default=3, help='Max depth to plot for readability')
+    args = parser.parse_args()
+    main(args)
