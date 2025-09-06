@@ -1,0 +1,15 @@
+notebooks/01-exploration-and-model.ipynb
+
+A minimal notebook with:
+
+Project overview
+
+Dataset preview
+
+EDA (distribution, counts)
+
+Preprocessing
+
+Model training
+
+Visualizations
