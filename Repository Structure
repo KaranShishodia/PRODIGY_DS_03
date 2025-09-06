@@ -1,0 +1,14 @@
+decision-tree-bank-marketing/
+├─ data/
+│ └─ bank_marketing.csv # sample dataset included
+├─ notebooks/
+│ └─ 01-exploration-and-model.ipynb
+├─ src/
+│ └─ train_decision_tree.py
+├─ outputs/
+│ ├─ confusion_matrix.png
+│ ├─ decision_tree.png
+│ └─ feature_importance.png
+├─ requirements.txt
+├─ README.md
+└─ LICENSE
